@@ -1,16 +1,21 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Galaxy Upload Cloudinary + Firebase</title>
+  <title>20/10 vui vẻ</title>
+  <link rel="icon" type="image/png" href="/heart.png" />
   <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
   <script type="importmap">
     {
       "imports": {
         "three": "https://unpkg.com/three@0.152.2/build/three.module.js",
-        "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.152.2/examples/jsm/controls/OrbitControls.js"
+        "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.152.2/examples/jsm/controls/OrbitControls.js",
+        "three/examples/jsm/loaders/FontLoader.js": "https://unpkg.com/three@0.152.2/examples/jsm/loaders/FontLoader.js",
+        "three/examples/jsm/geometries/TextGeometry.js": "https://unpkg.com/three@0.152.2/examples/jsm/geometries/TextGeometry.js"
       }
     }
   </script>
@@ -18,96 +23,68 @@
 
 <body>
   <div id="container">
-    <div id="image-input-container">
-      <label>Chọn ảnh (sẽ gửi lên Cloudinary → lưu link trên Firebase):</label><br />
-      <input type="file" id="image-upload" accept="image/*" multiple />
-      <br /><br />
-      <textarea id="image-links" rows="4" cols="40" readonly></textarea><br />
-      <button id="generate-link">Copy link hiển thị</button>
+    <div id="image-input-container" >
+      <label>Nhập link ảnh (thêm ảnh khác bằng cách thêm dấu , phẩy sau link ảnh cũ):</label><br />
+      <textarea id="image-links" rows="4" cols="40"></textarea><br />
+      <button id="generate-link">Copy link trang</button>
+      <label>Hoặc chọn ảnh từ máy:</label><br />
+<input type="file" id="image-upload" accept="image/*" multiple />
+<br />
     </div>
+
+    <button id="toggle-audio" class="text-white btn-audio-toggle"
+      style="position: absolute; top: 10px; right: 10px; z-index: 999;">
+      <i id="audio-icon" class="fa-solid fa-volume-xmark"></i>
+    </button>
+
+    <div id="landscape-warning">
+      <div class="warning-content">
+        <div class="rotate-icon"></div>
+        <h1>20/10 vui vẻe</h1>
+        <h1>Tinh Cầu</h1>
+        <p style="font-size: 0.6em;">Xoay ngang màn hình nha!</p>
+        <p style="font-size: 0.6em;">Nhớ chạm vào tinh cầu ở giữa để xem nha.</p>
+        <div class="stars-bg"></div>
+      </div>
+    </div>
+
+    <div id="dark-overlay"></div>
+    <div id="info"></div>
+
   </div>
-
-  <script type="module">
-    // Import Firebase
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
-
-    // ⚙️ Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyCnWKoYXwf4zz_3cndM9TXI7pJJmSALMa4",
-      authDomain: "pnl-53051.firebaseapp.com",
-      projectId: "pnl-53051",
-      storageBucket: "pnl-53051.firebasestorage.app",
-      messagingSenderId: "441869406071",
-      appId: "1:441869406071:web:9daf7906bd8b9f47279b72",
-      measurementId: "G-7NERQH0HLZ"
+  <script>
+    window.dataLove2Loveloom = {
+      template: "galaxy",
+      data: {
+        keychain: { name: "Loveloom", phone: "Loveloom", address: "Loveloom" },
+        ringTexts: ["A5K59"],
+      }
     };
-
-    const app = initializeApp(firebaseConfig);
-    const storage = getStorage(app);
-
-    // ⚙️ Cloudinary Config
-    const CLOUD_NAME = "dpihfxijg"; // 🔁 thay bằng tên Cloudinary của bạn
-    const UPLOAD_PRESET = "20-10-pnl"; // 🔁 thay bằng preset không cần auth
-
-    const uploadInput = document.getElementById("image-upload");
-    const imageLinksTextarea = document.getElementById("image-links");
-
-    uploadInput.addEventListener("change", async (event) => {
-      const files = event.target.files;
-      const cloudinaryURLs = [];
-
-      for (const file of files) {
-        try {
-          // === 1️⃣ Upload ảnh lên Cloudinary ===
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("upload_preset", UPLOAD_PRESET);
-
-          const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-            method: "POST",
-            body: formData
-          });
-
-          const cloudData = await cloudRes.json();
-          if (!cloudData.secure_url) throw new Error("Cloudinary upload failed");
-
-          const cloudUrl = cloudData.secure_url;
-          cloudinaryURLs.push(cloudUrl);
-          console.log("✅ Uploaded to Cloudinary:", cloudUrl);
-
-        } catch (err) {
-          console.error("❌ Lỗi upload Cloudinary:", err);
-          alert("Upload ảnh lên Cloudinary thất bại!");
-        }
-      }
-
-      // === 2️⃣ Lưu danh sách link vào Firebase ===
-      try {
-        const jsonBlob = new Blob([JSON.stringify(cloudinaryURLs, null, 2)], { type: "application/json" });
-        const fileRef = ref(storage, `urls/${Date.now()}.json`);
-        await uploadBytes(fileRef, jsonBlob);
-        const jsonURL = await getDownloadURL(fileRef);
-
-        imageLinksTextarea.value = jsonURL;
-        alert("✅ Upload thành công! Link danh sách ảnh lưu trên Firebase.");
-
-      } catch (err) {
-        console.error("❌ Lỗi lưu link lên Firebase:", err);
-        alert("Không thể lưu link vào Firebase.");
-      }
-    });
-
-    // === 3️⃣ Copy link JSON Firebase khi nhấn nút ===
-    document.getElementById("generate-link").addEventListener("click", () => {
-      const text = imageLinksTextarea.value.trim();
-      if (!text) return alert("Chưa có link nào để copy!");
-      navigator.clipboard.writeText(text);
-      alert("✅ Link Firebase đã được sao chép!");
-    });
   </script>
 
-  <!-- Galaxy hiển thị ảnh -->
+  <script src="./script.js"></script>
+  <script>
+  const uploadInput = document.getElementById("image-upload");
+  const imageLinksTextarea = document.getElementById("image-links");
+
+  uploadInput.addEventListener("change", (event) => {
+    const files = event.target.files;
+    let urls = [];
+
+    for (let file of files) {
+      // tạo link blob tạm
+      const url = URL.createObjectURL(file);
+      urls.push(url);
+    }
+
+    // Nếu textarea đã có link → thêm dấu ", "
+    if (imageLinksTextarea.value.trim() !== "") {
+      imageLinksTextarea.value += ", " + urls.join(", ");
+    } else {
+      imageLinksTextarea.value = urls.join(", ");
+    }
+  });
+</script>
   <script type="module" src="./galaxy.js"></script>
 </body>
 
