@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Galaxy Upload Cloudinary + Firebase</title>
+  <title>Galaxy Upload - Cloudinary + Firebase</title>
   <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
   <script type="importmap">
     {
       "imports": {
@@ -19,20 +20,21 @@
 <body>
   <div id="container">
     <div id="image-input-container">
-      <label>Chọn ảnh (sẽ gửi lên Cloudinary → lưu link trên Firebase):</label><br />
-      <input type="file" id="image-upload" accept="image/*" multiple />
-      <br /><br />
-      <textarea id="image-links" rows="4" cols="40" readonly></textarea><br />
-      <button id="generate-link">Copy link hiển thị</button>
+      <label><b>Chọn ảnh để tải lên (có thể chọn nhiều):</b></label><br />
+      <input type="file" id="image-upload" accept="image/*" multiple /><br /><br />
+
+      <textarea id="image-links" rows="4" cols="40" readonly placeholder="Link chia sẻ sẽ hiện ở đây..."></textarea><br />
+      <button id="generate-link">📋 Copy link chia sẻ</button>
     </div>
   </div>
 
+  <!-- Script upload Cloudinary + Firebase -->
   <script type="module">
-    // Import Firebase
+    // ==== 1️⃣ Import Firebase SDK ====
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
 
-    // ⚙️ Firebase config
+    // ==== 2️⃣ Firebase Config ====
     const firebaseConfig = {
       apiKey: "AIzaSyCnWKoYXwf4zz_3cndM9TXI7pJJmSALMa4",
       authDomain: "pnl-53051.firebaseapp.com",
@@ -46,69 +48,78 @@
     const app = initializeApp(firebaseConfig);
     const storage = getStorage(app);
 
-    // ⚙️ Cloudinary Config
-    const CLOUD_NAME = "dpihfxijg"; // 🔁 thay bằng tên Cloudinary của bạn
-    const UPLOAD_PRESET = "20-10-pnl"; // 🔁 thay bằng preset không cần auth
+    // ==== 3️⃣ Cloudinary Config ====
+    const CLOUD_NAME = "dpihfxijg";       // ✅ Cloudinary của bạn
+    const UPLOAD_PRESET = "20-10-pnl";    // ✅ Preset unsigned
 
+    // ==== 4️⃣ Upload ảnh ====
     const uploadInput = document.getElementById("image-upload");
     const imageLinksTextarea = document.getElementById("image-links");
+    const copyBtn = document.getElementById("generate-link");
 
     uploadInput.addEventListener("change", async (event) => {
       const files = event.target.files;
-      const cloudinaryURLs = [];
+      if (!files.length) return alert("Bạn chưa chọn ảnh!");
 
-      for (const file of files) {
-        try {
-          // === 1️⃣ Upload ảnh lên Cloudinary ===
+      // Hiển thị trạng thái
+      imageLinksTextarea.value = "⏳ Đang tải ảnh lên Cloudinary...";
+      copyBtn.disabled = true;
+
+      try {
+        // Upload tất cả ảnh song song (nhanh hơn)
+        const uploads = [...files].map(async (file) => {
           const formData = new FormData();
           formData.append("file", file);
           formData.append("upload_preset", UPLOAD_PRESET);
 
-          const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+          const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
             method: "POST",
             body: formData
           });
 
-          const cloudData = await cloudRes.json();
-          if (!cloudData.secure_url) throw new Error("Cloudinary upload failed");
+          const data = await res.json();
+          if (!data.secure_url) throw new Error(data.error?.message || "Upload thất bại Cloudinary");
+          return data.secure_url;
+        });
 
-          const cloudUrl = cloudData.secure_url;
-          cloudinaryURLs.push(cloudUrl);
-          console.log("✅ Uploaded to Cloudinary:", cloudUrl);
+        const cloudinaryURLs = await Promise.all(uploads);
+        console.log("✅ Ảnh Cloudinary:", cloudinaryURLs);
 
-        } catch (err) {
-          console.error("❌ Lỗi upload Cloudinary:", err);
-          alert("Upload ảnh lên Cloudinary thất bại!");
-        }
-      }
-
-      // === 2️⃣ Lưu danh sách link vào Firebase ===
-      try {
+        // ==== 5️⃣ Lưu danh sách link vào Firebase ====
         const jsonBlob = new Blob([JSON.stringify(cloudinaryURLs, null, 2)], { type: "application/json" });
         const fileRef = ref(storage, `urls/${Date.now()}.json`);
         await uploadBytes(fileRef, jsonBlob);
         const jsonURL = await getDownloadURL(fileRef);
 
-        imageLinksTextarea.value = jsonURL;
-        alert("✅ Upload thành công! Link danh sách ảnh lưu trên Firebase.");
+        // ==== 6️⃣ Tạo link chia sẻ ====
+        const redirectURL = `${window.location.origin}/?images=${encodeURIComponent(jsonURL)}`;
+        imageLinksTextarea.value = redirectURL;
 
+        // Copy link
+        await navigator.clipboard.writeText(redirectURL);
+        alert("✅ Tải ảnh thành công! Link chia sẻ đã được sao chép:\n" + redirectURL);
       } catch (err) {
-        console.error("❌ Lỗi lưu link lên Firebase:", err);
-        alert("Không thể lưu link vào Firebase.");
+        console.error("❌ Lỗi upload:", err);
+        alert("Đã xảy ra lỗi khi tải ảnh. Vui lòng thử lại!");
+        imageLinksTextarea.value = "";
+      } finally {
+        copyBtn.disabled = false;
       }
     });
 
-    // === 3️⃣ Copy link JSON Firebase khi nhấn nút ===
-    document.getElementById("generate-link").addEventListener("click", () => {
+    // ==== 7️⃣ Copy link thủ công ====
+    copyBtn.addEventListener("click", () => {
       const text = imageLinksTextarea.value.trim();
-      if (!text) return alert("Chưa có link nào để copy!");
+      if (!text || text.startsWith("⏳")) {
+        alert("Chưa có link để copy!");
+        return;
+      }
       navigator.clipboard.writeText(text);
-      alert("✅ Link Firebase đã được sao chép!");
+      alert("✅ Link chia sẻ đã được copy!");
     });
   </script>
 
-  <!-- Galaxy hiển thị ảnh -->
+  <!-- Script galaxy hiển thị ảnh -->
   <script type="module" src="./galaxy.js"></script>
 </body>
-
 </html>
