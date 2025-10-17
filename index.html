@@ -3,38 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Galaxy Upload - Cloudinary + Firebase</title>
+  <title>Tải ảnh nhanh - Cloudinary + Firebase</title>
   <link rel="stylesheet" href="./style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.152.2/build/three.module.js",
-        "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.152.2/examples/jsm/controls/OrbitControls.js"
-      }
-    }
-  </script>
 </head>
 
 <body>
   <div id="container">
     <div id="image-input-container">
-      <label><b>Chọn ảnh để tải lên (có thể chọn nhiều):</b></label><br />
+      <label><b>Chọn nhiều ảnh (sẽ nén nhẹ & upload song song):</b></label><br />
       <input type="file" id="image-upload" accept="image/*" multiple /><br /><br />
-
+      <progress id="upload-progress" value="0" max="100" style="width: 80%; display:none;"></progress><br /><br />
       <textarea id="image-links" rows="4" cols="40" readonly placeholder="Link chia sẻ sẽ hiện ở đây..."></textarea><br />
       <button id="generate-link">📋 Copy link chia sẻ</button>
     </div>
   </div>
 
-  <!-- Script upload Cloudinary + Firebase -->
+  <!-- Upload script -->
   <script type="module">
-    // ==== 1️⃣ Import Firebase SDK ====
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
 
-    // ==== 2️⃣ Firebase Config ====
+    // ==== Firebase Config ====
     const firebaseConfig = {
       apiKey: "AIzaSyCnWKoYXwf4zz_3cndM9TXI7pJJmSALMa4",
       authDomain: "pnl-53051.firebaseapp.com",
@@ -48,28 +38,52 @@
     const app = initializeApp(firebaseConfig);
     const storage = getStorage(app);
 
-    // ==== 3️⃣ Cloudinary Config ====
-    const CLOUD_NAME = "dpihfxijg";       // ✅ Cloudinary của bạn
-    const UPLOAD_PRESET = "20-10-pnl";    // ✅ Preset unsigned
+    // ==== Cloudinary Config ====
+    const CLOUD_NAME = "dpihfxijg";
+    const UPLOAD_PRESET = "20-10-pnl";
 
-    // ==== 4️⃣ Upload ảnh ====
     const uploadInput = document.getElementById("image-upload");
     const imageLinksTextarea = document.getElementById("image-links");
+    const progressBar = document.getElementById("upload-progress");
     const copyBtn = document.getElementById("generate-link");
 
-    uploadInput.addEventListener("change", async (event) => {
-      const files = event.target.files;
-      if (!files.length) return alert("Bạn chưa chọn ảnh!");
+    // ===== Hàm nén ảnh nhẹ trước khi upload =====
+    async function compressImage(file, maxWidth = 1280, quality = 0.7) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const scale = Math.min(maxWidth / img.width, 1);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(
+            (blob) => resolve(blob),
+            "image/jpeg",
+            quality
+          );
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
 
-      // Hiển thị trạng thái
-      imageLinksTextarea.value = "⏳ Đang tải ảnh lên Cloudinary...";
-      copyBtn.disabled = true;
+    // ===== Upload chính =====
+    uploadInput.addEventListener("change", async (event) => {
+      const files = [...event.target.files];
+      if (!files.length) return alert("Hãy chọn ít nhất 1 ảnh!");
+
+      progressBar.style.display = "block";
+      progressBar.value = 0;
+      imageLinksTextarea.value = "⏳ Đang tải ảnh...";
 
       try {
-        // Upload tất cả ảnh song song (nhanh hơn)
-        const uploads = [...files].map(async (file) => {
+        // === Nén & upload song song ===
+        let done = 0;
+        const uploads = files.map(async (file) => {
+          const compressed = await compressImage(file);
           const formData = new FormData();
-          formData.append("file", file);
+          formData.append("file", compressed);
           formData.append("upload_preset", UPLOAD_PRESET);
 
           const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
@@ -78,48 +92,46 @@
           });
 
           const data = await res.json();
-          if (!data.secure_url) throw new Error(data.error?.message || "Upload thất bại Cloudinary");
+          if (!data.secure_url) throw new Error(data.error?.message || "Upload Cloudinary lỗi");
+
+          done++;
+          progressBar.value = (done / files.length) * 100;
           return data.secure_url;
         });
 
         const cloudinaryURLs = await Promise.all(uploads);
-        console.log("✅ Ảnh Cloudinary:", cloudinaryURLs);
 
-        // ==== 5️⃣ Lưu danh sách link vào Firebase ====
+        // === Lưu JSON link vào Firebase ===
         const jsonBlob = new Blob([JSON.stringify(cloudinaryURLs, null, 2)], { type: "application/json" });
         const fileRef = ref(storage, `urls/${Date.now()}.json`);
         await uploadBytes(fileRef, jsonBlob);
         const jsonURL = await getDownloadURL(fileRef);
 
-        // ==== 6️⃣ Tạo link chia sẻ ====
+        // === Tạo link chia sẻ ===
         const redirectURL = `${window.location.origin}/?images=${encodeURIComponent(jsonURL)}`;
         imageLinksTextarea.value = redirectURL;
 
-        // Copy link
         await navigator.clipboard.writeText(redirectURL);
-        alert("✅ Tải ảnh thành công! Link chia sẻ đã được sao chép:\n" + redirectURL);
+        alert("✅ Tải ảnh xong! Link chia sẻ đã được copy:\n" + redirectURL);
       } catch (err) {
-        console.error("❌ Lỗi upload:", err);
-        alert("Đã xảy ra lỗi khi tải ảnh. Vui lòng thử lại!");
+        console.error(err);
+        alert("❌ Lỗi upload: " + err.message);
         imageLinksTextarea.value = "";
       } finally {
-        copyBtn.disabled = false;
+        progressBar.style.display = "none";
       }
     });
 
-    // ==== 7️⃣ Copy link thủ công ====
+    // Copy link thủ công
     copyBtn.addEventListener("click", () => {
       const text = imageLinksTextarea.value.trim();
-      if (!text || text.startsWith("⏳")) {
-        alert("Chưa có link để copy!");
-        return;
-      }
+      if (!text || text.startsWith("⏳")) return alert("Chưa có link để copy!");
       navigator.clipboard.writeText(text);
-      alert("✅ Link chia sẻ đã được copy!");
+      alert("✅ Link đã được sao chép!");
     });
   </script>
 
-  <!-- Script galaxy hiển thị ảnh -->
+  <!-- Galaxy -->
   <script type="module" src="./galaxy.js"></script>
 </body>
 </html>
