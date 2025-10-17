@@ -23,13 +23,13 @@
 
 <body>
   <div id="container">
-    <div id="image-input-container" >
+    <div id="image-input-container">
       <label>Nhập link ảnh (thêm ảnh khác bằng cách thêm dấu , phẩy sau link ảnh cũ):</label><br />
       <textarea id="image-links" rows="4" cols="40"></textarea><br />
       <button id="generate-link">Copy link trang</button>
       <label>Hoặc chọn ảnh từ máy:</label><br />
-<input type="file" id="image-upload" accept="image/*" multiple />
-<br />
+      <input type="file" id="image-upload" accept="image/*" multiple />
+      <br />
     </div>
 
     <button id="toggle-audio" class="text-white btn-audio-toggle"
@@ -50,8 +50,8 @@
 
     <div id="dark-overlay"></div>
     <div id="info"></div>
-
   </div>
+
   <script>
     window.dataLove2Loveloom = {
       template: "galaxy",
@@ -62,29 +62,60 @@
     };
   </script>
 
+  <!-- Script phát nhạc -->
   <script src="./script.js"></script>
-  <script>
-  const uploadInput = document.getElementById("image-upload");
-  const imageLinksTextarea = document.getElementById("image-links");
 
-  uploadInput.addEventListener("change", (event) => {
-    const files = event.target.files;
-    let urls = [];
+  <!-- Script upload ảnh Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
 
-    for (let file of files) {
-      // tạo link blob tạm
-      const url = URL.createObjectURL(file);
-      urls.push(url);
-    }
+    // ✅ Cấu hình Firebase của bạn
+    const firebaseConfig = {
+      apiKey: "AIzaSyCnWKoYXwf4zz_3cndM9TXI7pJJmSALMa4",
+      authDomain: "pnl-53051.firebaseapp.com",
+      projectId: "pnl-53051",
+      storageBucket: "pnl-53051.firebasestorage.app",
+      messagingSenderId: "441869406071",
+      appId: "1:441869406071:web:9daf7906bd8b9f47279b72",
+      measurementId: "G-7NERQH0HLZ"
+    };
 
-    // Nếu textarea đã có link → thêm dấu ", "
-    if (imageLinksTextarea.value.trim() !== "") {
-      imageLinksTextarea.value += ", " + urls.join(", ");
-    } else {
-      imageLinksTextarea.value = urls.join(", ");
-    }
-  });
-</script>
+    // ⚙️ Khởi tạo Firebase
+    const app = initializeApp(firebaseConfig);
+    const storage = getStorage(app);
+
+    const uploadInput = document.getElementById("image-upload");
+    const imageLinksTextarea = document.getElementById("image-links");
+
+    uploadInput.addEventListener("change", async (event) => {
+      const files = event.target.files;
+      const urls = [];
+
+      for (const file of files) {
+        try {
+          const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
+          await uploadBytes(storageRef, file);
+          const downloadURL = await getDownloadURL(storageRef);
+          urls.push(downloadURL);
+        } catch (err) {
+          console.error("Lỗi upload Firebase:", err);
+          alert("Không thể upload ảnh lên Firebase. Hãy kiểm tra cấu hình!");
+        }
+      }
+
+      // Thêm link vào textarea
+      if (imageLinksTextarea.value.trim() !== "") {
+        imageLinksTextarea.value += ", " + urls.join(", ");
+      } else {
+        imageLinksTextarea.value = urls.join(", ");
+      }
+
+      alert("✅ Ảnh đã được upload lên Firebase thành công!");
+    });
+  </script>
+
+  <!-- Script hiệu ứng Galaxy -->
   <script type="module" src="./galaxy.js"></script>
 </body>
 
